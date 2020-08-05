@@ -3,6 +3,7 @@ package polar.com.androidblesdk;
 import android.Manifest;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
@@ -10,9 +11,16 @@ import android.widget.Button;
 
 import org.reactivestreams.Publisher;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.text.DateFormat;
+import java.time.LocalDate;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.UUID;
+import java.text.SimpleDateFormat;
+//import java.text.DateFormat;
 
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
 import io.reactivex.rxjava3.disposables.Disposable;
@@ -39,9 +47,20 @@ public class MainActivity extends AppCompatActivity {
     Disposable ppgDisposable;
     Disposable ppiDisposable;
     Disposable scanDisposable;
-    String DEVICE_ID = "218DDA23"; // or bt address like F5:A7:B8:EF:7A:D1 // TODO replace with your device id
+    String DEVICE_ID = "A0:9E:1A:71:8F:36"; // or bt address like F5:A7:B8:EF:7A:D1 // TODO replace with your device id
     Disposable autoConnectDisposable;
     PolarExerciseEntry exerciseEntry;
+
+    String FILENAME_BASE_ACC = "EVO_ACC_DATA";
+    String FILENAME_BASE_HR = "EVO_HR_DATA";
+    String FILENAME_BASE_DEV = "EVO_DEV_DATA";
+    String FILENAME_EXTENSION = ".csv";
+    FileOutputStream accFileOutputStream = null;
+    FileOutputStream hrFileOutputStream = null;
+    FileOutputStream devFileOutputStream = null;
+
+    int blePower;
+    int batteryLevel;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -55,22 +74,53 @@ public class MainActivity extends AppCompatActivity {
         final Button connect = this.findViewById(R.id.connect_button);
         final Button disconnect = this.findViewById(R.id.disconnect_button);
         final Button autoConnect = this.findViewById(R.id.auto_connect_button);
-        final Button ecg = this.findViewById(R.id.ecg_button);
         final Button acc = this.findViewById(R.id.acc_button);
-        final Button ppg = this.findViewById(R.id.ohr_ppg_button);
-        final Button ppi = this.findViewById(R.id.ohr_ppi_button);
         final Button scan = this.findViewById(R.id.scan_button);
-        final Button list = this.findViewById(R.id.list_exercises);
-        final Button read = this.findViewById(R.id.read_exercise);
-        final Button remove = this.findViewById(R.id.remove_exercise);
-        final Button startH10Recording = this.findViewById(R.id.start_h10_recording);
-        final Button stopH10Recording = this.findViewById(R.id.stop_h10_recording);
-        final Button H10RecordingStatus = this.findViewById(R.id.h10_recording_status);
         final Button setTime = this.findViewById(R.id.set_time);
 
         api.setApiLogger(s -> Log.d(TAG,s));
 
         Log.d(TAG,"version: " + PolarBleApiDefaultImpl.versionInfo());
+
+        // make sure we can write to files
+        String state = Environment.getExternalStorageState();
+        if (Environment.MEDIA_MOUNTED.equals(state)) {
+            // open our 2 data files
+            Log.d(TAG,"isExternalStorageWritable() allows writing files");
+            DateFormat df = new SimpleDateFormat("yyyy-MM-dd");
+            String today = df.format(Calendar.getInstance().getTime());
+            // accelerometer data first
+//            String filename = FILENAME_BASE_ACC + System.currentTimeMillis() + FILENAME_EXTENSION;
+            String filename = FILENAME_BASE_ACC + "-" + today + FILENAME_EXTENSION;
+            String fileHeader = "Start: " + Calendar.getInstance().getTime() + System.lineSeparator();
+            File accFile = new File(getApplicationContext().getExternalFilesDir(null), filename);
+            try {
+                accFileOutputStream = new FileOutputStream(accFile,true);
+                accFileOutputStream.write(fileHeader.getBytes());
+            } catch (IOException e1) {
+                Log.d(TAG, "exception opening: " + filename + ", " + e1.getMessage());
+            }
+
+            // now set up for heart rate data
+            filename = FILENAME_BASE_HR + "-" + today + FILENAME_EXTENSION;
+            File hrFile = new File(getApplicationContext().getExternalFilesDir(null), filename);
+            try {
+                hrFileOutputStream = new FileOutputStream(hrFile, true);
+                hrFileOutputStream.write(fileHeader.getBytes());
+            } catch (IOException e1) {
+                Log.d(TAG, "exception opening: " + filename + ", " + e1.getMessage());
+            }
+
+            // now set up for device data
+            filename = FILENAME_BASE_DEV + "-" + today + FILENAME_EXTENSION;
+            File devFile = new File(getApplicationContext().getExternalFilesDir(null), filename);
+            try {
+                devFileOutputStream = new FileOutputStream(devFile, true);
+                devFileOutputStream.write(fileHeader.getBytes());
+            } catch (IOException e1) {
+                Log.d(TAG, "exception opening: " + filename + ", " + e1.getMessage());
+            }
+        }
 
         api.setApiCallback(new PolarBleApiCallback() {
             @Override
@@ -100,33 +150,33 @@ public class MainActivity extends AppCompatActivity {
             }
 
             @Override
-            public void ecgFeatureReady(@NonNull String identifier) {
-                Log.d(TAG,"ECG READY: " + identifier);
-                // ecg streaming can be started now if needed
-            }
-
-            @Override
             public void accelerometerFeatureReady(@NonNull String identifier) {
                 Log.d(TAG,"ACC READY: " + identifier);
                 // acc streaming can be started now if needed
-            }
-
-            @Override
-            public void ppgFeatureReady(@NonNull String identifier) {
-                Log.d(TAG,"PPG READY: " + identifier);
-                // ohr ppg can be started
-            }
-
-            @Override
-            public void ppiFeatureReady(@NonNull String identifier) {
-                Log.d(TAG,"PPI READY: " + identifier);
-                // ohr ppi can be started
-            }
-
-            @Override
-            public void biozFeatureReady(@NonNull String identifier) {
-                Log.d(TAG,"BIOZ READY: " + identifier);
-                // ohr ppi can be started
+                if(accDisposable == null) {
+                    accDisposable = api.requestAccSettings(DEVICE_ID).toFlowable().flatMap((Function<PolarSensorSetting, Publisher<PolarAccelerometerData>>) settings -> {
+                        PolarSensorSetting sensorSetting = settings.maxSettings();
+                        return api.startAccStreaming(DEVICE_ID,sensorSetting);
+                    }).observeOn(AndroidSchedulers.mainThread()).subscribe(
+                            polarAccelerometerData -> {
+                                Log.d(TAG,"New acc data: " + polarAccelerometerData.samples.size() + " samples at time: " + polarAccelerometerData.timeStamp);
+                                for( PolarAccelerometerData.PolarAccelerometerSample data : polarAccelerometerData.samples ){
+                                    String dataOut = Calendar.getInstance().getTimeInMillis() + "," + polarAccelerometerData.timeStamp + "," + data.x + "," + data.y + ","+ data.z + System.lineSeparator();
+                                    try {
+                                        accFileOutputStream.write(dataOut.getBytes());
+                                    } catch (IOException e1) {
+                                        Log.d(TAG, "exception writing acc data" + ", " + e1.getMessage());
+                                    }
+                                }
+                            },
+                            throwable -> Log.e(TAG,""+throwable.getLocalizedMessage()),
+                            () -> Log.d(TAG,"complete")
+                    );
+                } else {
+                    // NOTE dispose will stop streaming if it is "running"
+                    accDisposable.dispose();
+                    accDisposable = null;
+                }
             }
 
             @Override
@@ -144,60 +194,29 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void batteryLevelReceived(@NonNull String identifier, int level) {
                 Log.d(TAG,"BATTERY LEVEL: " + level);
-
+                batteryLevel = level;
+                String dataOut = Calendar.getInstance().getTimeInMillis() + "," + batteryLevel + System.lineSeparator();
+                try {
+                    devFileOutputStream.write(dataOut.getBytes());
+                } catch (IOException e1) {
+                    Log.d(TAG, "exception writing dev data" + ", " + e1.getMessage());
+                }
             }
 
             @Override
             public void hrNotificationReceived(@NonNull String identifier,@NonNull PolarHrData data) {
-                Log.d(TAG,"HR value: " + data.hr + " rrsMs: " + data.rrsMs + " rr: " + data.rrs + " contact: " + data.contactStatus + "," + data.contactStatusSupported);
+                Log.d(TAG,"HR value: " + data.hr);
+                String dataOut =  Calendar.getInstance().getTimeInMillis() + "," + data.hr + System.lineSeparator();
+                try {
+                    hrFileOutputStream.write(dataOut.getBytes());
+                } catch (IOException e1) {
+                    Log.d(TAG, "exception writing hr data" + ", " + e1.getMessage());
+                }
             }
 
             @Override
             public void polarFtpFeatureReady(@NonNull String s) {
                 Log.d(TAG,"FTP ready");
-            }
-        });
-
-        list.setOnClickListener(v -> api.listExercises(DEVICE_ID).observeOn(AndroidSchedulers.mainThread()).subscribe(
-                polarExerciseEntry -> {
-                    Log.d(TAG,"next: " + polarExerciseEntry.date + " path: " + polarExerciseEntry.path + " id: " +polarExerciseEntry.identifier);
-                    exerciseEntry = polarExerciseEntry;
-                },
-                throwable -> Log.e(TAG,"fetch exercises failed: " + throwable.getLocalizedMessage()),
-                () -> Log.d(TAG,"complete")
-        ));
-
-        read.setOnClickListener(v -> {
-            if(exerciseEntry != null) {
-                api.fetchExercise(DEVICE_ID, exerciseEntry).observeOn(AndroidSchedulers.mainThread()).subscribe(
-                        polarExerciseData -> Log.d(TAG,"exercise data count: " + polarExerciseData.hrSamples.size() + " samples: " + polarExerciseData.hrSamples),
-                        throwable -> Log.e(TAG,"Failed to read exercise: " + throwable.getLocalizedMessage())
-                );
-            }
-        });
-
-        remove.setOnClickListener(v -> {
-            if(exerciseEntry != null) {
-                api.removeExercise(DEVICE_ID,exerciseEntry).observeOn(AndroidSchedulers.mainThread()).subscribe(
-                        () -> Log.d(TAG,"ex removed ok"),
-                        throwable -> Log.d(TAG,"ex remove failed: " + throwable.getLocalizedMessage())
-                );
-            }
-        });
-
-        broadcast.setOnClickListener(v -> {
-            if(broadcastDisposable == null) {
-                broadcastDisposable = api.startListenForPolarHrBroadcasts(null).subscribe(
-                        polarBroadcastData -> Log.d(TAG,"HR BROADCAST " +
-                                polarBroadcastData.polarDeviceInfo.deviceId + " HR: " +
-                                polarBroadcastData.hr + " batt: " +
-                                polarBroadcastData.batteryStatus),
-                        throwable -> Log.e(TAG,""+throwable.getLocalizedMessage()),
-                        () -> Log.d(TAG,"complete")
-                );
-            }else{
-                broadcastDisposable.dispose();
-                broadcastDisposable = null;
             }
         });
 
@@ -228,27 +247,6 @@ public class MainActivity extends AppCompatActivity {
             );
         });
 
-        ecg.setOnClickListener(v -> {
-            if(ecgDisposable == null) {
-                ecgDisposable = api.requestEcgSettings(DEVICE_ID).toFlowable().flatMap((Function<PolarSensorSetting, Publisher<PolarEcgData>>) polarEcgSettings -> {
-                    PolarSensorSetting sensorSetting = polarEcgSettings.maxSettings();
-                    return api.startEcgStreaming(DEVICE_ID,sensorSetting);
-                }).subscribe(
-                        polarEcgData -> {
-                            for( Integer microVolts : polarEcgData.samples ){
-                                Log.d(TAG,"    yV: " + microVolts);
-                            }
-                        },
-                        throwable -> Log.e(TAG, ""+throwable.toString()),
-                        () -> Log.d(TAG, "complete")
-                );
-            } else {
-                // NOTE stops streaming if it is "running"
-                ecgDisposable.dispose();
-                ecgDisposable = null;
-            }
-        });
-
         acc.setOnClickListener(v -> {
             if(accDisposable == null) {
                 accDisposable = api.requestAccSettings(DEVICE_ID).toFlowable().flatMap((Function<PolarSensorSetting, Publisher<PolarAccelerometerData>>) settings -> {
@@ -256,8 +254,14 @@ public class MainActivity extends AppCompatActivity {
                     return api.startAccStreaming(DEVICE_ID,sensorSetting);
                 }).observeOn(AndroidSchedulers.mainThread()).subscribe(
                         polarAccelerometerData -> {
+                            Log.d(TAG,"New acc data: " + polarAccelerometerData.samples.size() + " samples at time: " + polarAccelerometerData.timeStamp);
                             for( PolarAccelerometerData.PolarAccelerometerSample data : polarAccelerometerData.samples ){
-                                Log.d(TAG,"    x: " + data.x + " y: " + data.y + " z: "+ data.z);
+                                String dataOut = polarAccelerometerData.timeStamp + "," + data.x + "," + data.y + ","+ data.z + System.lineSeparator();
+                                try {
+                                    accFileOutputStream.write(dataOut.getBytes());
+                                } catch (IOException e1) {
+                                    Log.d(TAG, "exception writing acc data" + ", " + e1.getMessage());
+                                }
                             }
                         },
                         throwable -> Log.e(TAG,""+throwable.getLocalizedMessage()),
@@ -267,41 +271,6 @@ public class MainActivity extends AppCompatActivity {
                 // NOTE dispose will stop streaming if it is "running"
                 accDisposable.dispose();
                 accDisposable = null;
-            }
-        });
-
-        ppg.setOnClickListener(v -> {
-            if(ppgDisposable == null) {
-                ppgDisposable = api.requestPpgSettings(DEVICE_ID).toFlowable().flatMap((Function<PolarSensorSetting, Publisher<PolarOhrPPGData>>) polarPPGSettings -> api.startOhrPPGStreaming(DEVICE_ID,polarPPGSettings.maxSettings())).subscribe(
-                        polarOhrPPGData -> {
-                            for( PolarOhrPPGData.PolarOhrPPGSample data : polarOhrPPGData.samples ){
-                                Log.d(TAG,"    ppg0: " + data.ppg0 + " ppg1: " + data.ppg1 + " ppg2: " + data.ppg2 + "ambient: " + data.ambient);
-                            }
-                        },
-                        throwable -> Log.e(TAG,""+throwable.getLocalizedMessage()),
-                        () -> Log.d(TAG,"complete")
-                );
-            } else {
-                ppgDisposable.dispose();
-                ppgDisposable = null;
-            }
-        });
-
-        ppi.setOnClickListener(v -> {
-            if(ppiDisposable == null) {
-                ppiDisposable = api.startOhrPPIStreaming(DEVICE_ID).observeOn(AndroidSchedulers.mainThread()).subscribe(
-                        ppiData -> {
-                            for(PolarOhrPPIData.PolarOhrPPISample sample : ppiData.samples) {
-                                Log.d(TAG, "ppi: " + sample.ppi
-                                        + " blocker: " + sample.blockerBit + " errorEstimate: " + sample.errorEstimate);
-                            }
-                        },
-                        throwable -> Log.e(TAG,""+throwable.getLocalizedMessage()),
-                        () -> Log.d(TAG,"complete")
-                );
-            } else {
-                ppiDisposable.dispose();
-                ppiDisposable = null;
             }
         });
 
@@ -317,21 +286,6 @@ public class MainActivity extends AppCompatActivity {
                 scanDisposable = null;
             }
         });
-
-        startH10Recording.setOnClickListener(view -> api.startRecording(DEVICE_ID,"TEST_APP_ID", PolarBleApi.RecordingInterval.INTERVAL_1S, PolarBleApi.SampleType.HR).subscribe(
-                () -> Log.d(TAG,"recording started"),
-                throwable -> Log.e(TAG,"recording start failed: " + throwable.getLocalizedMessage())
-        ));
-
-        stopH10Recording.setOnClickListener(view -> api.stopRecording(DEVICE_ID).subscribe(
-                () -> Log.d(TAG,"recording stopped"),
-                throwable -> Log.e(TAG,"recording stop failed: " + throwable.getLocalizedMessage())
-        ));
-
-        H10RecordingStatus.setOnClickListener(view -> api.requestRecordingStatus(DEVICE_ID).subscribe(
-                pair -> Log.d(TAG,"recording on: " + pair.first + " ID: " + pair.second),
-                throwable -> Log.e(TAG, "recording status failed: " + throwable.getLocalizedMessage())
-        ));
 
         setTime.setOnClickListener(v -> {
             Calendar calendar = Calendar.getInstance();
