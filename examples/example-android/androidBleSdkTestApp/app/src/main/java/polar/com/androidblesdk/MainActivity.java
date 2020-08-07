@@ -47,7 +47,8 @@ public class MainActivity extends AppCompatActivity {
     Disposable ppgDisposable;
     Disposable ppiDisposable;
     Disposable scanDisposable;
-    String DEVICE_ID = "A0:9E:1A:71:8F:36"; // or bt address like F5:A7:B8:EF:7A:D1 // TODO replace with your device id
+//    String DEVICE_ID = "A0:9E:1A:71:8F:36"; // or bt address like F5:A7:B8:EF:7A:D1 // TODO replace with your device id
+    String DEVICE_ID[] = {"A0:9E:1A:71:88:92", "A0:9E:1A:71:8F:36"}; // or bt address like F5:A7:B8:EF:7A:D1 // TODO replace with your device id\n"; // or bt address like F5:A7:B8:EF:7A:D1 // TODO replace with your device id
     Disposable autoConnectDisposable;
     PolarExerciseEntry exerciseEntry;
 
@@ -131,13 +132,13 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void deviceConnected(@NonNull PolarDeviceInfo polarDeviceInfo) {
                 Log.d(TAG,"CONNECTED: " + polarDeviceInfo.deviceId);
-                DEVICE_ID = polarDeviceInfo.deviceId;
+                DEVICE_ID[0] = polarDeviceInfo.deviceId;
             }
 
             @Override
             public void deviceConnecting(@NonNull PolarDeviceInfo polarDeviceInfo) {
                 Log.d(TAG,"CONNECTING: " + polarDeviceInfo.deviceId);
-                DEVICE_ID = polarDeviceInfo.deviceId;
+                DEVICE_ID[0] = polarDeviceInfo.deviceId;
             }
 
             @Override
@@ -154,9 +155,9 @@ public class MainActivity extends AppCompatActivity {
                 Log.d(TAG,"ACC READY: " + identifier);
                 // acc streaming can be started now if needed
                 if(accDisposable == null) {
-                    accDisposable = api.requestAccSettings(DEVICE_ID).toFlowable().flatMap((Function<PolarSensorSetting, Publisher<PolarAccelerometerData>>) settings -> {
+                    accDisposable = api.requestAccSettings(DEVICE_ID[0]).toFlowable().flatMap((Function<PolarSensorSetting, Publisher<PolarAccelerometerData>>) settings -> {
                         PolarSensorSetting sensorSetting = settings.maxSettings();
-                        return api.startAccStreaming(DEVICE_ID,sensorSetting);
+                        return api.startAccStreaming(DEVICE_ID[0],sensorSetting);
                     }).observeOn(AndroidSchedulers.mainThread()).subscribe(
                             polarAccelerometerData -> {
                                 Log.d(TAG,"New acc data: " + polarAccelerometerData.samples.size() + " samples at time: " + polarAccelerometerData.timeStamp);
@@ -222,7 +223,7 @@ public class MainActivity extends AppCompatActivity {
 
         connect.setOnClickListener(v -> {
             try {
-                api.connectToDevice(DEVICE_ID);
+                api.connectToDevice(DEVICE_ID[0]);
             } catch (PolarInvalidArgument polarInvalidArgument) {
                 polarInvalidArgument.printStackTrace();
             }
@@ -230,7 +231,7 @@ public class MainActivity extends AppCompatActivity {
 
         disconnect.setOnClickListener(view -> {
             try {
-                api.disconnectFromDevice(DEVICE_ID);
+                api.disconnectFromDevice(DEVICE_ID[0]);
             } catch (PolarInvalidArgument polarInvalidArgument) {
                 polarInvalidArgument.printStackTrace();
             }
@@ -249,9 +250,9 @@ public class MainActivity extends AppCompatActivity {
 
         acc.setOnClickListener(v -> {
             if(accDisposable == null) {
-                accDisposable = api.requestAccSettings(DEVICE_ID).toFlowable().flatMap((Function<PolarSensorSetting, Publisher<PolarAccelerometerData>>) settings -> {
+                accDisposable = api.requestAccSettings(DEVICE_ID[0]).toFlowable().flatMap((Function<PolarSensorSetting, Publisher<PolarAccelerometerData>>) settings -> {
                     PolarSensorSetting sensorSetting = settings.maxSettings();
-                    return api.startAccStreaming(DEVICE_ID,sensorSetting);
+                    return api.startAccStreaming(DEVICE_ID[0],sensorSetting);
                 }).observeOn(AndroidSchedulers.mainThread()).subscribe(
                         polarAccelerometerData -> {
                             Log.d(TAG,"New acc data: " + polarAccelerometerData.samples.size() + " samples at time: " + polarAccelerometerData.timeStamp);
@@ -290,7 +291,7 @@ public class MainActivity extends AppCompatActivity {
         setTime.setOnClickListener(v -> {
             Calendar calendar = Calendar.getInstance();
             calendar.setTime(new Date());
-            api.setLocalTime(DEVICE_ID,calendar).subscribe(
+            api.setLocalTime(DEVICE_ID[0],calendar).subscribe(
                     () -> Log.d(TAG,"time set to device"),
                     throwable -> Log.d(TAG,"set time failed: " + throwable.getLocalizedMessage()));
         });
