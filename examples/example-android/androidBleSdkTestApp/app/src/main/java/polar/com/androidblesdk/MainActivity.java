@@ -8,6 +8,7 @@ import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.widget.Button;
+import android.widget.TextView;
 
 import org.reactivestreams.Publisher;
 
@@ -18,6 +19,8 @@ import java.text.DateFormat;
 import java.time.LocalDate;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import java.text.SimpleDateFormat;
 //import java.text.DateFormat;
@@ -47,7 +50,11 @@ public class MainActivity extends AppCompatActivity {
     Disposable ppgDisposable;
     Disposable ppiDisposable;
     Disposable scanDisposable;
-//    String DEVICE_ID = "A0:9E:1A:71:8F:36"; // or bt address like F5:A7:B8:EF:7A:D1 // TODO replace with your device id
+//    HashMap<String, Integer> deviceMap = new HashMap<>();
+
+//    deviceMap.put("A0:9E:1A:71:88:92", 1);
+//    deviceMap.put("A0:9E:1A:71:88:92", 2);
+
     String DEVICE_ID[] = {"A0:9E:1A:71:88:92", "A0:9E:1A:71:8F:36"}; // or bt address like F5:A7:B8:EF:7A:D1 // TODO replace with your device id\n"; // or bt address like F5:A7:B8:EF:7A:D1 // TODO replace with your device id
     Disposable autoConnectDisposable;
     PolarExerciseEntry exerciseEntry;
@@ -62,6 +69,7 @@ public class MainActivity extends AppCompatActivity {
 
     int blePower;
     int batteryLevel;
+    int lastHeartRate = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -71,13 +79,15 @@ public class MainActivity extends AppCompatActivity {
         api = PolarBleApiDefaultImpl.defaultImplementation(this, PolarBleApi.ALL_FEATURES);
         api.setPolarFilter(false);
 
-        final Button broadcast = this.findViewById(R.id.broadcast_button);
         final Button connect = this.findViewById(R.id.connect_button);
         final Button disconnect = this.findViewById(R.id.disconnect_button);
-        final Button autoConnect = this.findViewById(R.id.auto_connect_button);
-        final Button acc = this.findViewById(R.id.acc_button);
         final Button scan = this.findViewById(R.id.scan_button);
-        final Button setTime = this.findViewById(R.id.set_time);
+
+        final TextView textViewHeartRateValue = findViewById(R.id.textViewHeartRateValue);
+        final TextView textViewAccelXValue = findViewById(R.id.textViewAccelXValue);
+        final TextView textViewAccelYValue = findViewById(R.id.textViewAccelYValue);
+        final TextView textViewAccelZValue = findViewById(R.id.textViewAccelZValue);
+
 
         api.setApiLogger(s -> Log.d(TAG,s));
 
@@ -156,12 +166,16 @@ public class MainActivity extends AppCompatActivity {
                 // acc streaming can be started now if needed
                 if(accDisposable == null) {
                     accDisposable = api.requestAccSettings(DEVICE_ID[0]).toFlowable().flatMap((Function<PolarSensorSetting, Publisher<PolarAccelerometerData>>) settings -> {
+                        // TODO find out how to configure "settings" to send one accelerometer data point at a time.
                         PolarSensorSetting sensorSetting = settings.maxSettings();
                         return api.startAccStreaming(DEVICE_ID[0],sensorSetting);
                     }).observeOn(AndroidSchedulers.mainThread()).subscribe(
                             polarAccelerometerData -> {
                                 Log.d(TAG,"New acc data: " + polarAccelerometerData.samples.size() + " samples at time: " + polarAccelerometerData.timeStamp);
                                 for( PolarAccelerometerData.PolarAccelerometerSample data : polarAccelerometerData.samples ){
+                                    textViewAccelXValue.setText(data.x + "");
+                                    textViewAccelYValue.setText(data.y + "");
+                                    textViewAccelZValue.setText(data.z + "");
                                     String dataOut = Calendar.getInstance().getTimeInMillis() + "," + polarAccelerometerData.timeStamp + "," + data.x + "," + data.y + ","+ data.z + System.lineSeparator();
                                     try {
                                         accFileOutputStream.write(dataOut.getBytes());
@@ -206,7 +220,9 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void hrNotificationReceived(@NonNull String identifier,@NonNull PolarHrData data) {
-                Log.d(TAG,"HR value: " + data.hr);
+                lastHeartRate = data.hr;
+                textViewHeartRateValue.setText(lastHeartRate+"");
+                Log.d(TAG,"HR value: " + lastHeartRate);
                 String dataOut =  Calendar.getInstance().getTimeInMillis() + "," + data.hr + System.lineSeparator();
                 try {
                     hrFileOutputStream.write(dataOut.getBytes());
@@ -237,7 +253,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        autoConnect.setOnClickListener(view -> {
+/*        autoConnect.setOnClickListener(view -> {
             if(autoConnectDisposable != null) {
                 autoConnectDisposable.dispose();
                 autoConnectDisposable = null;
@@ -247,34 +263,7 @@ public class MainActivity extends AppCompatActivity {
                     throwable -> Log.e(TAG,"" + throwable.toString())
             );
         });
-
-        acc.setOnClickListener(v -> {
-            if(accDisposable == null) {
-                accDisposable = api.requestAccSettings(DEVICE_ID[0]).toFlowable().flatMap((Function<PolarSensorSetting, Publisher<PolarAccelerometerData>>) settings -> {
-                    PolarSensorSetting sensorSetting = settings.maxSettings();
-                    return api.startAccStreaming(DEVICE_ID[0],sensorSetting);
-                }).observeOn(AndroidSchedulers.mainThread()).subscribe(
-                        polarAccelerometerData -> {
-                            Log.d(TAG,"New acc data: " + polarAccelerometerData.samples.size() + " samples at time: " + polarAccelerometerData.timeStamp);
-                            for( PolarAccelerometerData.PolarAccelerometerSample data : polarAccelerometerData.samples ){
-                                String dataOut = polarAccelerometerData.timeStamp + "," + data.x + "," + data.y + ","+ data.z + System.lineSeparator();
-                                try {
-                                    accFileOutputStream.write(dataOut.getBytes());
-                                } catch (IOException e1) {
-                                    Log.d(TAG, "exception writing acc data" + ", " + e1.getMessage());
-                                }
-                            }
-                        },
-                        throwable -> Log.e(TAG,""+throwable.getLocalizedMessage()),
-                        () -> Log.d(TAG,"complete")
-                );
-            } else {
-                // NOTE dispose will stop streaming if it is "running"
-                accDisposable.dispose();
-                accDisposable = null;
-            }
-        });
-
+*/
         scan.setOnClickListener(view -> {
             if(scanDisposable == null) {
                 scanDisposable = api.searchForDevice().observeOn(AndroidSchedulers.mainThread()).subscribe(
@@ -288,14 +277,14 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        setTime.setOnClickListener(v -> {
+/*        setTime.setOnClickListener(v -> {
             Calendar calendar = Calendar.getInstance();
             calendar.setTime(new Date());
             api.setLocalTime(DEVICE_ID[0],calendar).subscribe(
                     () -> Log.d(TAG,"time set to device"),
                     throwable -> Log.d(TAG,"set time failed: " + throwable.getLocalizedMessage()));
         });
-
+*/
         if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && savedInstanceState == null) {
             this.requestPermissions(new String[]{Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION}, 1);
         }

@@ -1,3 +1,13 @@
 <resources>
     <string name="app_name">AndroidBleSdk</string>
+    <string name="selectDeviceButton">"Select Device"</string>
+    <string name="heartRateLabel">Heart Rate</string>
+    <string name="heartRateValue">0</string>
+    <string name="AccelXLabel">"X"</string>
+    <string name="AccelYLabel">"Y"</string>
+    <string name="AccelZLabel">"Z"</string>
+    <string name="AccelXValue">0</string>
+    <string name="AccelYValue">0</string>
+    <string name="AccelZValue">0</string>
+
 </resources>

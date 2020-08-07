@@ -1,105 +1,132 @@
 <?xml version="1.0" encoding="utf-8"?>
 <android.support.constraint.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context="polar.com.androidblesdk.MainActivity">
+
     <ScrollView
+        android:id="@+id/scrollView2"
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:orientation="vertical">
-            <Button
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="broadcast"
-                android:id="@+id/broadcast_button"/>
-            <Button
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="connect"
-                android:id="@+id/connect_button"/>
-            <Button
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="disconnect"
-                android:id="@+id/disconnect_button"/>
-            <Button
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="auto_connect_toggle"
-                android:id="@+id/auto_connect_button"/>
-            <Button
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="ecg_stream"
-                android:id="@+id/ecg_button"/>
-            <Button
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="acc_stream"
-                android:id="@+id/acc_button"/>
-            <Button
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="ppg_stream"
-                android:id="@+id/ohr_ppg_button"/>
 
             <Button
+                android:id="@+id/scan_button"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="ppi_stream"
-                android:id="@+id/ohr_ppi_button"/>
+                android:text="@string/selectDeviceButton" />
 
             <Button
+                android:id="@+id/connect_button"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="scan devices"
-                android:id="@+id/scan_button"/>
+                android:text="connect" />
 
             <Button
+                android:id="@+id/disconnect_button"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="list exercises"
-                android:id="@+id/list_exercises"/>
+                android:text="disconnect" />
 
-            <Button
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="read exercise"
-                android:id="@+id/read_exercise"/>
-
-            <Button
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="remove exercise"
-                android:id="@+id/remove_exercise"/>
-
-            <Button
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Start H10 recording"
-                android:id="@+id/start_h10_recording"/>
-
-            <Button
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Stop H10 recording"
-                android:id="@+id/stop_h10_recording"/>
-
-            <Button
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="H10 recording status"
-                android:id="@+id/h10_recording_status"/>
-
-            <Button
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Set time"
-                android:id="@+id/set_time"/>
         </LinearLayout>
     </ScrollView>
+
+    <TextView
+        android:id="@+id/textViewHeartRateLabel"
+        android:layout_width="180dp"
+        android:layout_height="70dp"
+        android:layout_marginStart="32dp"
+        android:layout_marginTop="84dp"
+        android:text="@string/heartRateLabel"
+        android:textAppearance="@style/TextAppearance.AppCompat.Display1"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/scrollView2" />
+
+    <TextView
+        android:id="@+id/textViewAccelXLabel"
+        android:layout_width="180dp"
+        android:layout_height="70dp"
+        android:text="@string/AccelXLabel"
+        android:textAppearance="@style/TextAppearance.AppCompat.Display1"
+        app:layout_constraintStart_toStartOf="@+id/textViewHeartRateLabel"
+        app:layout_constraintTop_toBottomOf="@+id/textViewHeartRateLabel" />
+
+    <TextView
+        android:id="@+id/textViewAccelYLabel"
+        android:layout_width="180dp"
+        android:layout_height="70dp"
+        android:layout_marginStart="32dp"
+        android:text="@string/AccelYLabel"
+        android:textAppearance="@style/TextAppearance.AppCompat.Display1"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/textViewAccelXLabel" />
+
+    <TextView
+        android:id="@+id/textViewAccelZLabel"
+        android:layout_width="180dp"
+        android:layout_height="70dp"
+        android:layout_marginStart="32dp"
+        android:text="@string/AccelZLabel"
+        android:textAppearance="@style/TextAppearance.AppCompat.Display1"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/textViewAccelYLabel" />
+
+    <TextView
+        android:id="@+id/textViewHeartRateValue"
+        android:layout_width="84dp"
+        android:layout_height="70dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:text="@string/heartRateValue"
+        android:textAppearance="@style/TextAppearance.AppCompat.Display1"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toEndOf="@+id/textViewHeartRateLabel"
+        app:layout_constraintTop_toTopOf="@+id/textViewHeartRateLabel" />
+
+    <TextView
+        android:id="@+id/textViewAccelXValue"
+        android:layout_width="84dp"
+        android:layout_height="70dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:text="@string/AccelXValue"
+        android:textAppearance="@style/TextAppearance.AppCompat.Display1"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toEndOf="@+id/textViewHeartRateLabel"
+        app:layout_constraintTop_toBottomOf="@+id/textViewHeartRateValue" />
+
+    <TextView
+        android:id="@+id/textViewAccelYValue"
+        android:layout_width="84dp"
+        android:layout_height="70dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:text="@string/AccelYValue"
+        android:textAppearance="@style/TextAppearance.AppCompat.Display1"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toEndOf="@+id/textViewHeartRateLabel"
+        app:layout_constraintTop_toBottomOf="@+id/textViewAccelXValue" />
+
+    <TextView
+        android:id="@+id/textViewAccelZValue"
+        android:layout_width="84dp"
+        android:layout_height="70dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:text="@string/AccelZValue"
+        android:textAppearance="@style/TextAppearance.AppCompat.Display1"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toEndOf="@+id/textViewHeartRateLabel"
+        app:layout_constraintTop_toBottomOf="@+id/textViewAccelYValue" />
+
 </android.support.constraint.ConstraintLayout>
