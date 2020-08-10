@@ -1,6 +1,8 @@
 package polar.com.androidblesdk;
 
 import android.Manifest;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
@@ -16,14 +18,10 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.text.DateFormat;
-import java.time.LocalDate;
 import java.util.Calendar;
-import java.util.Date;
 import java.util.HashMap;
-import java.util.Map;
 import java.util.UUID;
 import java.text.SimpleDateFormat;
-//import java.text.DateFormat;
 
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
 import io.reactivex.rxjava3.disposables.Disposable;
@@ -34,30 +32,41 @@ import polar.com.sdk.api.PolarBleApiDefaultImpl;
 import polar.com.sdk.api.errors.PolarInvalidArgument;
 import polar.com.sdk.api.model.PolarAccelerometerData;
 import polar.com.sdk.api.model.PolarDeviceInfo;
-import polar.com.sdk.api.model.PolarEcgData;
 import polar.com.sdk.api.model.PolarExerciseEntry;
 import polar.com.sdk.api.model.PolarHrData;
-import polar.com.sdk.api.model.PolarOhrPPGData;
-import polar.com.sdk.api.model.PolarOhrPPIData;
 import polar.com.sdk.api.model.PolarSensorSetting;
 
 public class MainActivity extends AppCompatActivity {
     private final static String TAG = MainActivity.class.getSimpleName();
     PolarBleApi api;
-    Disposable broadcastDisposable;
-    Disposable ecgDisposable;
     Disposable accDisposable;
-    Disposable ppgDisposable;
-    Disposable ppiDisposable;
     Disposable scanDisposable;
-//    HashMap<String, Integer> deviceMap = new HashMap<>();
 
-//    deviceMap.put("A0:9E:1A:71:88:92", 1);
-//    deviceMap.put("A0:9E:1A:71:88:92", 2);
+    static String bluetoothDeviceNames[] = {
+            "Device 1","Device 2"
+    };
+    static String bluetoothDeviceAddresses[] = {
+            "A0:9E:1A:71:88:92","A0:9E:1A:71:8F:36"
+    };
 
-    String DEVICE_ID[] = {"A0:9E:1A:71:88:92", "A0:9E:1A:71:8F:36"}; // or bt address like F5:A7:B8:EF:7A:D1 // TODO replace with your device id\n"; // or bt address like F5:A7:B8:EF:7A:D1 // TODO replace with your device id
+    static HashMap<String, String> bluetoothDeviceNameToAddressMap;
+    static HashMap<String, String> bluetoothDeviceAddressToNameMap;
+    static {
+        bluetoothDeviceNameToAddressMap = new HashMap<>();
+        bluetoothDeviceAddressToNameMap = new HashMap<>();
+        for (int i = 0; i < bluetoothDeviceNames.length; i++) {
+            bluetoothDeviceNameToAddressMap.put(bluetoothDeviceNames[i], bluetoothDeviceAddresses[i]);
+            bluetoothDeviceAddressToNameMap.put(bluetoothDeviceAddresses[i], bluetoothDeviceNames[i]);
+        }
+    }
+
+    String currentBluetoothDeviceId = null;
+    String currentBluetoothDeviceName = null;
+    String targetBluetoothDeviceName = null;
+    String selectedBluetoothDeviceName = null;
+    String connectionState = "NOT CONNECTED";
+
     Disposable autoConnectDisposable;
-    PolarExerciseEntry exerciseEntry;
 
     String FILENAME_BASE_ACC = "EVO_ACC_DATA";
     String FILENAME_BASE_HR = "EVO_HR_DATA";
@@ -71,6 +80,9 @@ public class MainActivity extends AppCompatActivity {
     int batteryLevel;
     int lastHeartRate = 0;
 
+    static final int DIALOG_SELECT_DEVICE = 0;
+    static final int DIALOG_SOMETHING_ELSE = 1;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -78,16 +90,19 @@ public class MainActivity extends AppCompatActivity {
         // Notice PolarBleApi.ALL_FEATURES are enabled
         api = PolarBleApiDefaultImpl.defaultImplementation(this, PolarBleApi.ALL_FEATURES);
         api.setPolarFilter(false);
+        api.
 
-        final Button connect = this.findViewById(R.id.connect_button);
         final Button disconnect = this.findViewById(R.id.disconnect_button);
         final Button scan = this.findViewById(R.id.scan_button);
+
+        final TextView textViewConnectionState = findViewById(R.id.textViewConnectionState);
+        textViewConnectionState.setText(connectionState);
 
         final TextView textViewHeartRateValue = findViewById(R.id.textViewHeartRateValue);
         final TextView textViewAccelXValue = findViewById(R.id.textViewAccelXValue);
         final TextView textViewAccelYValue = findViewById(R.id.textViewAccelYValue);
         final TextView textViewAccelZValue = findViewById(R.id.textViewAccelZValue);
-
+        final TextView textViewAccelTotalValue = findViewById(R.id.textViewAccelTotalValue);
 
         api.setApiLogger(s -> Log.d(TAG,s));
 
@@ -141,57 +156,56 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void deviceConnected(@NonNull PolarDeviceInfo polarDeviceInfo) {
-                Log.d(TAG,"CONNECTED: " + polarDeviceInfo.deviceId);
-                DEVICE_ID[0] = polarDeviceInfo.deviceId;
+                Log.d(TAG,"CONNECTED: " + polarDeviceInfo.address);
+                currentBluetoothDeviceId = polarDeviceInfo.deviceId;
+                currentBluetoothDeviceName = bluetoothDeviceAddressToNameMap.get(polarDeviceInfo.address);
+                connectionState = "CONNECTED TO: " + currentBluetoothDeviceName;
+                textViewConnectionState.setText(connectionState);
             }
 
             @Override
             public void deviceConnecting(@NonNull PolarDeviceInfo polarDeviceInfo) {
-                Log.d(TAG,"CONNECTING: " + polarDeviceInfo.deviceId);
-                DEVICE_ID[0] = polarDeviceInfo.deviceId;
+                Log.d(TAG,"CONNECTING: " + polarDeviceInfo.address);
+                connectionState = "CONNECTING TO: " + bluetoothDeviceAddressToNameMap.get(polarDeviceInfo.address);
+                textViewConnectionState.setText(connectionState);
             }
 
             @Override
             public void deviceDisconnected(@NonNull PolarDeviceInfo polarDeviceInfo) {
-                Log.d(TAG,"DISCONNECTED: " + polarDeviceInfo.deviceId);
-                ecgDisposable = null;
-                accDisposable = null;
-                ppgDisposable = null;
-                ppiDisposable = null;
+                Log.d(TAG,"DISCONNECTED: " + polarDeviceInfo.address);
+                connectionState = "NOT CONNECTED";
+                currentBluetoothDeviceId = null;
+                currentBluetoothDeviceName = null;
+                textViewConnectionState.setText(connectionState);
             }
 
             @Override
             public void accelerometerFeatureReady(@NonNull String identifier) {
                 Log.d(TAG,"ACC READY: " + identifier);
                 // acc streaming can be started now if needed
-                if(accDisposable == null) {
-                    accDisposable = api.requestAccSettings(DEVICE_ID[0]).toFlowable().flatMap((Function<PolarSensorSetting, Publisher<PolarAccelerometerData>>) settings -> {
-                        // TODO find out how to configure "settings" to send one accelerometer data point at a time.
-                        PolarSensorSetting sensorSetting = settings.maxSettings();
-                        return api.startAccStreaming(DEVICE_ID[0],sensorSetting);
-                    }).observeOn(AndroidSchedulers.mainThread()).subscribe(
-                            polarAccelerometerData -> {
-                                Log.d(TAG,"New acc data: " + polarAccelerometerData.samples.size() + " samples at time: " + polarAccelerometerData.timeStamp);
-                                for( PolarAccelerometerData.PolarAccelerometerSample data : polarAccelerometerData.samples ){
-                                    textViewAccelXValue.setText(data.x + "");
-                                    textViewAccelYValue.setText(data.y + "");
-                                    textViewAccelZValue.setText(data.z + "");
-                                    String dataOut = Calendar.getInstance().getTimeInMillis() + "," + polarAccelerometerData.timeStamp + "," + data.x + "," + data.y + ","+ data.z + System.lineSeparator();
-                                    try {
-                                        accFileOutputStream.write(dataOut.getBytes());
-                                    } catch (IOException e1) {
-                                        Log.d(TAG, "exception writing acc data" + ", " + e1.getMessage());
-                                    }
+                accDisposable = api.requestAccSettings(currentBluetoothDeviceId).toFlowable().flatMap((Function<PolarSensorSetting, Publisher<PolarAccelerometerData>>) settings -> {
+                    // TODO find out how to configure "settings" to send one accelerometer data point at a time.
+                    PolarSensorSetting sensorSetting = settings.maxSettings();
+                    return api.startAccStreaming(currentBluetoothDeviceId,sensorSetting);
+                }).observeOn(AndroidSchedulers.mainThread()).subscribe(
+                        polarAccelerometerData -> {
+                            Log.d(TAG,"New acc data: " + polarAccelerometerData.samples.size() + " samples at time: " + polarAccelerometerData.timeStamp);
+                            for( PolarAccelerometerData.PolarAccelerometerSample data : polarAccelerometerData.samples ){
+                                textViewAccelXValue.setText(data.x + "");
+                                textViewAccelYValue.setText(data.y + "");
+                                textViewAccelZValue.setText(data.z + "");
+                                textViewAccelTotalValue.setText((int)Math.pow(Math.pow(data.x,2) + Math.pow(data.y,2) + Math.pow(data.z,2),0.5) + "");
+                                String dataOut = Calendar.getInstance().getTimeInMillis() + "," + polarAccelerometerData.timeStamp + "," + data.x + "," + data.y + ","+ data.z + System.lineSeparator();
+                                try {
+                                    accFileOutputStream.write(dataOut.getBytes());
+                                } catch (IOException e1) {
+                                    Log.d(TAG, "exception writing acc data" + ", " + e1.getMessage());
                                 }
-                            },
-                            throwable -> Log.e(TAG,""+throwable.getLocalizedMessage()),
-                            () -> Log.d(TAG,"complete")
-                    );
-                } else {
-                    // NOTE dispose will stop streaming if it is "running"
-                    accDisposable.dispose();
-                    accDisposable = null;
-                }
+                            }
+                        },
+                        throwable -> Log.e(TAG,""+throwable.getLocalizedMessage()),
+                        () -> Log.d(TAG,"complete")
+                );
             }
 
             @Override
@@ -237,19 +251,13 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        connect.setOnClickListener(v -> {
-            try {
-                api.connectToDevice(DEVICE_ID[0]);
-            } catch (PolarInvalidArgument polarInvalidArgument) {
-                polarInvalidArgument.printStackTrace();
-            }
-        });
-
         disconnect.setOnClickListener(view -> {
-            try {
-                api.disconnectFromDevice(DEVICE_ID[0]);
-            } catch (PolarInvalidArgument polarInvalidArgument) {
-                polarInvalidArgument.printStackTrace();
+            if (currentBluetoothDeviceId != null) {
+                try {
+                    api.disconnectFromDevice(currentBluetoothDeviceId);
+                } catch (PolarInvalidArgument polarInvalidArgument) {
+                    polarInvalidArgument.printStackTrace();
+                }
             }
         });
 
@@ -265,16 +273,21 @@ public class MainActivity extends AppCompatActivity {
         });
 */
         scan.setOnClickListener(view -> {
-            if(scanDisposable == null) {
-                scanDisposable = api.searchForDevice().observeOn(AndroidSchedulers.mainThread()).subscribe(
-                        polarDeviceInfo -> Log.d(TAG, "polar device found id: " + polarDeviceInfo.deviceId + " address: " + polarDeviceInfo.address + " rssi: " + polarDeviceInfo.rssi + " name: " + polarDeviceInfo.name + " isConnectable: " + polarDeviceInfo.isConnectable),
-                        throwable -> Log.d(TAG, "" + throwable.getLocalizedMessage()),
-                        () -> Log.d(TAG, "complete")
-                );
-            }else{
-                scanDisposable.dispose();
-                scanDisposable = null;
-            }
+            api.searchForDevice().observeOn(AndroidSchedulers.mainThread()).subscribe(
+                polarDeviceInfo -> {
+                    Log.d(TAG, "polar device found id: " + polarDeviceInfo.deviceId + " address: " + polarDeviceInfo.address + " rssi: " + polarDeviceInfo.rssi + " name: " + polarDeviceInfo.name + " isConnectable: " + polarDeviceInfo.isConnectable);
+                    if (polarDeviceInfo.isConnectable) {
+                        // lookup to see if it is in our device list.
+                        // TODO
+                    }
+                },
+                throwable -> Log.d(TAG, "" + throwable.getLocalizedMessage()),
+                () -> {
+                    Log.d(TAG, "complete");
+                }
+            );
+            // show the dialog
+            showDialog(DIALOG_SELECT_DEVICE);
         });
 
 /*        setTime.setOnClickListener(v -> {
@@ -285,9 +298,54 @@ public class MainActivity extends AppCompatActivity {
                     throwable -> Log.d(TAG,"set time failed: " + throwable.getLocalizedMessage()));
         });
 */
+
         if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && savedInstanceState == null) {
             this.requestPermissions(new String[]{Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION}, 1);
         }
+    }
+
+    protected AlertDialog onCreateDialog(int id) {
+        switch(id) {
+            case DIALOG_SELECT_DEVICE:
+                AlertDialog.Builder builder = new AlertDialog.Builder(this);
+                builder.setTitle("Connect to Device")
+                        .setCancelable(false)
+                        .setSingleChoiceItems(bluetoothDeviceNames, -1, new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dialog, int item) {
+                                Log.d(TAG,"Device selected:  Name: " + bluetoothDeviceNames[item] +
+                                        " Address: (" + bluetoothDeviceAddresses[item] + ")");
+                                selectedBluetoothDeviceName = bluetoothDeviceNames[item];
+                            }
+                        })
+                        .setPositiveButton("Connect", new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dialog, int id) {
+                                // make the selected item active and try to connect
+                                targetBluetoothDeviceName = selectedBluetoothDeviceName;
+                                try {
+                                    Log.d(TAG,"Try connect to Target:" + targetBluetoothDeviceName + "(" + bluetoothDeviceNameToAddressMap.get(targetBluetoothDeviceName) + ")");
+                                    api.connectToDevice(bluetoothDeviceNameToAddressMap.get(targetBluetoothDeviceName));
+                                    connectionState = "CONNECTING TO: " + targetBluetoothDeviceName;
+                                } catch (PolarInvalidArgument polarInvalidArgument) {
+                                    polarInvalidArgument.printStackTrace();
+                                }
+
+                                Log.d(TAG,"Target device:" + targetBluetoothDeviceName);
+                            }
+                        })
+                        .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dialog, int id) {
+                                // nothing to do here.  Just leave it as-is.
+                                Log.d(TAG,"Device selection canceled: target device:" + targetBluetoothDeviceName +
+                                        " current device: " + currentBluetoothDeviceName);
+                                dialog.cancel();
+                            }
+                        });
+                AlertDialog alert = builder.create();
+                return alert;
+            case DIALOG_SOMETHING_ELSE:
+            default:
+        }
+        return null;
     }
 
     @Override

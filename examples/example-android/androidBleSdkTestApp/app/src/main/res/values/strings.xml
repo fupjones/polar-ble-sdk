@@ -9,5 +9,7 @@
     <string name="AccelXValue">0</string>
     <string name="AccelYValue">0</string>
     <string name="AccelZValue">0</string>
+    <string name="AccelTotalLabel">Total Accel</string>
+    <string name="AccelTotalValue">0</string>
 
 </resources>
