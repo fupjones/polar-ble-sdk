@@ -79,6 +79,7 @@ public class MainActivity extends AppCompatActivity {
     int blePower;
     int batteryLevel;
     int lastHeartRate = 0;
+    long lastAccSampleTime = 0;
 
     static final int DIALOG_SELECT_DEVICE = 0;
     static final int DIALOG_SOMETHING_ELSE = 1;
@@ -90,7 +91,6 @@ public class MainActivity extends AppCompatActivity {
         // Notice PolarBleApi.ALL_FEATURES are enabled
         api = PolarBleApiDefaultImpl.defaultImplementation(this, PolarBleApi.ALL_FEATURES);
         api.setPolarFilter(false);
-        api.
 
         final Button disconnect = this.findViewById(R.id.disconnect_button);
         final Button scan = this.findViewById(R.id.scan_button);
@@ -190,18 +190,27 @@ public class MainActivity extends AppCompatActivity {
                 }).observeOn(AndroidSchedulers.mainThread()).subscribe(
                         polarAccelerometerData -> {
                             Log.d(TAG,"New acc data: " + polarAccelerometerData.samples.size() + " samples at time: " + polarAccelerometerData.timeStamp);
+                            long timeStampTruncatedToMsec = (long)(Math.round((double)(polarAccelerometerData.timeStamp/1000.0)))*1000;
+                            long sampleCount = polarAccelerometerData.samples.size();
+                            long sampleInterval = (long)(Math.round(((double)(timeStampTruncatedToMsec - lastAccSampleTime)/sampleCount)/1000.0))*1000;
+                            lastAccSampleTime = timeStampTruncatedToMsec;
+                            PolarAccelerometerData.PolarAccelerometerSample lastSample = polarAccelerometerData.samples.get(polarAccelerometerData.samples.size()-1);
+                            long counter = 0;
+                            long syntheticStamp = 0;
                             for( PolarAccelerometerData.PolarAccelerometerSample data : polarAccelerometerData.samples ){
-                                textViewAccelXValue.setText(data.x + "");
-                                textViewAccelYValue.setText(data.y + "");
-                                textViewAccelZValue.setText(data.z + "");
-                                textViewAccelTotalValue.setText((int)Math.pow(Math.pow(data.x,2) + Math.pow(data.y,2) + Math.pow(data.z,2),0.5) + "");
-                                String dataOut = Calendar.getInstance().getTimeInMillis() + "," + polarAccelerometerData.timeStamp + "," + data.x + "," + data.y + ","+ data.z + System.lineSeparator();
+                                syntheticStamp = timeStampTruncatedToMsec - (sampleCount - 1 - counter)*sampleInterval;
+                                String dataOut = Calendar.getInstance().getTimeInMillis() + "," + syntheticStamp + "," + data.x + "," + data.y + ","+ data.z + System.lineSeparator();
+                                counter++;
                                 try {
                                     accFileOutputStream.write(dataOut.getBytes());
                                 } catch (IOException e1) {
                                     Log.d(TAG, "exception writing acc data" + ", " + e1.getMessage());
                                 }
                             }
+                            textViewAccelXValue.setText(lastSample.x + "");
+                            textViewAccelYValue.setText(lastSample.y + "");
+                            textViewAccelZValue.setText(lastSample.z + "");
+                            textViewAccelTotalValue.setText((int)Math.pow(Math.pow(lastSample.x,2) + Math.pow(lastSample.y,2) + Math.pow(lastSample.z,2),0.5) + "");
                         },
                         throwable -> Log.e(TAG,""+throwable.getLocalizedMessage()),
                         () -> Log.d(TAG,"complete")
