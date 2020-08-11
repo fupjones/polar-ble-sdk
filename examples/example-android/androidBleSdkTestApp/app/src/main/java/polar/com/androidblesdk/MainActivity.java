@@ -43,10 +43,15 @@ public class MainActivity extends AppCompatActivity {
     Disposable scanDisposable;
 
     static String bluetoothDeviceNames[] = {
-            "Device 1","Device 2"
+            "Device 1","Device 2","Device 3","Device 4","Device 5","Device 6"
     };
     static String bluetoothDeviceAddresses[] = {
-            "A0:9E:1A:71:88:92","A0:9E:1A:71:8F:36"
+            "A0:9E:1A:71:88:92",
+            "A0:9E:1A:71:8F:36",
+            "A0:9E:1A:6E:2E:DE",
+            "A0:9E:1A:71:89:BA",
+            "A0:9E:1A:6B:CE:46",
+            "A0:9E:1A:65:10:CF"
     };
 
     static HashMap<String, String> bluetoothDeviceNameToAddressMap;
@@ -61,7 +66,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     String currentBluetoothDeviceId = null;
-    String currentBluetoothDeviceName = null;
     String targetBluetoothDeviceName = null;
     String selectedBluetoothDeviceName = null;
     String connectionState = "NOT CONNECTED";
@@ -80,6 +84,8 @@ public class MainActivity extends AppCompatActivity {
     int batteryLevel;
     int lastHeartRate = 0;
     long lastAccSampleTime = 0;
+    long baseAccEpochTime = 0;
+    long baseAccDeviceTime = 0;
 
     static final int DIALOG_SELECT_DEVICE = 0;
     static final int DIALOG_SOMETHING_ELSE = 1;
@@ -158,9 +164,13 @@ public class MainActivity extends AppCompatActivity {
             public void deviceConnected(@NonNull PolarDeviceInfo polarDeviceInfo) {
                 Log.d(TAG,"CONNECTED: " + polarDeviceInfo.address);
                 currentBluetoothDeviceId = polarDeviceInfo.deviceId;
-                currentBluetoothDeviceName = bluetoothDeviceAddressToNameMap.get(polarDeviceInfo.address);
-                connectionState = "CONNECTED TO: " + currentBluetoothDeviceName;
+//                currentBluetoothDeviceName = bluetoothDeviceAddressToNameMap.get(polarDeviceInfo.address);
+                connectionState = "CONNECTED TO: " + bluetoothDeviceAddressToNameMap.get(polarDeviceInfo.address);
                 textViewConnectionState.setText(connectionState);
+                // reset the time adjustment variables for the accelerometer data
+                baseAccEpochTime = 0;
+                baseAccDeviceTime = 0;
+                lastAccSampleTime = 0;
             }
 
             @Override
@@ -175,38 +185,50 @@ public class MainActivity extends AppCompatActivity {
                 Log.d(TAG,"DISCONNECTED: " + polarDeviceInfo.address);
                 connectionState = "NOT CONNECTED";
                 currentBluetoothDeviceId = null;
-                currentBluetoothDeviceName = null;
                 textViewConnectionState.setText(connectionState);
             }
 
             @Override
             public void accelerometerFeatureReady(@NonNull String identifier) {
                 Log.d(TAG,"ACC READY: " + identifier);
-                // acc streaming can be started now if needed
-                accDisposable = api.requestAccSettings(currentBluetoothDeviceId).toFlowable().flatMap((Function<PolarSensorSetting, Publisher<PolarAccelerometerData>>) settings -> {
+                // this is a convenient place to try to set the time
+                Calendar calendar = Calendar.getInstance();
+/*                Log.d(TAG,"Setting time on device: " + calendar.getTime());
+                api.setLocalTime(currentBluetoothDeviceId,calendar).subscribe(
+                        () -> Log.d(TAG,"time set to device: " + currentBluetoothDeviceId),
+                        throwable -> Log.d(TAG,"set time failed: " + throwable.getLocalizedMessage())
+                );
+*/              accDisposable = api.requestAccSettings(currentBluetoothDeviceId).toFlowable().flatMap((Function<PolarSensorSetting, Publisher<PolarAccelerometerData>>) settings -> {
                     // TODO find out how to configure "settings" to send one accelerometer data point at a time.
                     PolarSensorSetting sensorSetting = settings.maxSettings();
                     return api.startAccStreaming(currentBluetoothDeviceId,sensorSetting);
                 }).observeOn(AndroidSchedulers.mainThread()).subscribe(
                         polarAccelerometerData -> {
-                            Log.d(TAG,"New acc data: " + polarAccelerometerData.samples.size() + " samples at time: " + polarAccelerometerData.timeStamp);
-                            long timeStampTruncatedToMsec = (long)(Math.round((double)(polarAccelerometerData.timeStamp/1000.0)))*1000;
+                            // try to align incoming sample times with phone epoch clock
+                            if (baseAccEpochTime == 0) {
+                                baseAccEpochTime = Calendar.getInstance().getTimeInMillis() * 1000000;
+                                baseAccDeviceTime = polarAccelerometerData.timeStamp;
+                            }
+                            long timeStampTruncatedToMsec = (long)(Math.round((double)((baseAccEpochTime + polarAccelerometerData.timeStamp - baseAccDeviceTime)/1000.0)))*1000;
                             long sampleCount = polarAccelerometerData.samples.size();
                             long sampleInterval = (long)(Math.round(((double)(timeStampTruncatedToMsec - lastAccSampleTime)/sampleCount)/1000.0))*1000;
-                            lastAccSampleTime = timeStampTruncatedToMsec;
                             PolarAccelerometerData.PolarAccelerometerSample lastSample = polarAccelerometerData.samples.get(polarAccelerometerData.samples.size()-1);
+                            Log.d(TAG,"New acc data: " + polarAccelerometerData.samples.size() + " samples at time: " + polarAccelerometerData.timeStamp + "," + Calendar.getInstance().getTimeInMillis() + "," + timeStampTruncatedToMsec);
                             long counter = 0;
                             long syntheticStamp = 0;
-                            for( PolarAccelerometerData.PolarAccelerometerSample data : polarAccelerometerData.samples ){
-                                syntheticStamp = timeStampTruncatedToMsec - (sampleCount - 1 - counter)*sampleInterval;
-                                String dataOut = Calendar.getInstance().getTimeInMillis() + "," + syntheticStamp + "," + data.x + "," + data.y + ","+ data.z + System.lineSeparator();
-                                counter++;
-                                try {
-                                    accFileOutputStream.write(dataOut.getBytes());
-                                } catch (IOException e1) {
-                                    Log.d(TAG, "exception writing acc data" + ", " + e1.getMessage());
+                            if (lastAccSampleTime != 0) {
+                                for (PolarAccelerometerData.PolarAccelerometerSample data : polarAccelerometerData.samples) {
+                                    syntheticStamp = timeStampTruncatedToMsec - (sampleCount - 1 - counter) * sampleInterval;
+                                    String dataOut = Calendar.getInstance().getTimeInMillis() * 1000000 + "," + syntheticStamp + "," + data.x + "," + data.y + "," + data.z + System.lineSeparator();
+                                    counter++;
+                                    try {
+                                        accFileOutputStream.write(dataOut.getBytes());
+                                    } catch (IOException e1) {
+                                        Log.d(TAG, "exception writing acc data" + ", " + e1.getMessage());
+                                    }
                                 }
                             }
+                            lastAccSampleTime = timeStampTruncatedToMsec;
                             textViewAccelXValue.setText(lastSample.x + "");
                             textViewAccelYValue.setText(lastSample.y + "");
                             textViewAccelZValue.setText(lastSample.z + "");
@@ -246,7 +268,7 @@ public class MainActivity extends AppCompatActivity {
                 lastHeartRate = data.hr;
                 textViewHeartRateValue.setText(lastHeartRate+"");
                 Log.d(TAG,"HR value: " + lastHeartRate);
-                String dataOut =  Calendar.getInstance().getTimeInMillis() + "," + data.hr + System.lineSeparator();
+                String dataOut =  Calendar.getInstance().getTimeInMillis()*1000000 + "," + data.hr + System.lineSeparator();
                 try {
                     hrFileOutputStream.write(dataOut.getBytes());
                 } catch (IOException e1) {
@@ -299,15 +321,6 @@ public class MainActivity extends AppCompatActivity {
             showDialog(DIALOG_SELECT_DEVICE);
         });
 
-/*        setTime.setOnClickListener(v -> {
-            Calendar calendar = Calendar.getInstance();
-            calendar.setTime(new Date());
-            api.setLocalTime(DEVICE_ID[0],calendar).subscribe(
-                    () -> Log.d(TAG,"time set to device"),
-                    throwable -> Log.d(TAG,"set time failed: " + throwable.getLocalizedMessage()));
-        });
-*/
-
         if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && savedInstanceState == null) {
             this.requestPermissions(new String[]{Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION}, 1);
         }
@@ -344,8 +357,8 @@ public class MainActivity extends AppCompatActivity {
                         .setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
                             public void onClick(DialogInterface dialog, int id) {
                                 // nothing to do here.  Just leave it as-is.
-                                Log.d(TAG,"Device selection canceled: target device:" + targetBluetoothDeviceName +
-                                        " current device: " + currentBluetoothDeviceName);
+                                Log.d(TAG,"Device selection canceled: target device:" + targetBluetoothDeviceName);
+                                targetBluetoothDeviceName = null;
                                 dialog.cancel();
                             }
                         });
