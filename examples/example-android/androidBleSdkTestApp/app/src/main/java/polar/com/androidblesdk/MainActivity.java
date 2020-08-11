@@ -1,5 +1,7 @@
 package polar.com.androidblesdk;
 
+import polar.com.androidblesdk.BuildConfig;
+
 import android.Manifest;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
@@ -97,6 +99,9 @@ public class MainActivity extends AppCompatActivity {
         // Notice PolarBleApi.ALL_FEATURES are enabled
         api = PolarBleApiDefaultImpl.defaultImplementation(this, PolarBleApi.ALL_FEATURES);
         api.setPolarFilter(false);
+
+        final TextView textViewVersion = findViewById(R.id.textViewVersion);
+        textViewVersion.setText("v." + BuildConfig.VERSION_NAME + "." + BuildConfig.VERSION_CODE);
 
         final Button disconnect = this.findViewById(R.id.disconnect_button);
         final Button scan = this.findViewById(R.id.scan_button);
