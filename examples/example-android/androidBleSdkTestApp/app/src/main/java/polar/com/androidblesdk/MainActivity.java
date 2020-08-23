@@ -5,6 +5,10 @@ import polar.com.androidblesdk.BuildConfig;
 import android.Manifest;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
+import android.media.MediaPlayer;
+import android.media.Ringtone;
+import android.media.RingtoneManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
@@ -89,6 +93,8 @@ public class MainActivity extends AppCompatActivity {
     long baseAccEpochTime = 0;
     long baseAccDeviceTime = 0;
 
+    boolean disconnectRequested = false;
+
     static final int DIALOG_SELECT_DEVICE = 0;
     static final int DIALOG_SOMETHING_ELSE = 1;
 
@@ -103,8 +109,10 @@ public class MainActivity extends AppCompatActivity {
         final TextView textViewVersion = findViewById(R.id.textViewVersion);
         textViewVersion.setText("v." + BuildConfig.VERSION_NAME + "." + BuildConfig.VERSION_CODE);
 
-        final Button disconnect = this.findViewById(R.id.disconnect_button);
-        final Button scan = this.findViewById(R.id.scan_button);
+        final Button connectButton = this.findViewById(R.id.connectButton);
+        final Button disconnectButton = this.findViewById(R.id.disconnectButton);
+        final Button startTestButton = this.findViewById(R.id.startTestButton);
+        final Button endTestButton = this.findViewById(R.id.endTestButton);
 
         final TextView textViewConnectionState = findViewById(R.id.textViewConnectionState);
         textViewConnectionState.setText(connectionState);
@@ -114,6 +122,9 @@ public class MainActivity extends AppCompatActivity {
         final TextView textViewAccelYValue = findViewById(R.id.textViewAccelYValue);
         final TextView textViewAccelZValue = findViewById(R.id.textViewAccelZValue);
         final TextView textViewAccelTotalValue = findViewById(R.id.textViewAccelTotalValue);
+
+        final MediaPlayer connectMP = MediaPlayer.create(this, R.raw.connected);
+        final MediaPlayer disconnectMP = MediaPlayer.create(this, R.raw.disconnected);
 
         api.setApiLogger(s -> Log.d(TAG,s));
 
@@ -176,6 +187,8 @@ public class MainActivity extends AppCompatActivity {
                 baseAccEpochTime = 0;
                 baseAccDeviceTime = 0;
                 lastAccSampleTime = 0;
+                disconnectRequested = false;
+                connectMP.start();
             }
 
             @Override
@@ -191,6 +204,10 @@ public class MainActivity extends AppCompatActivity {
                 connectionState = "NOT CONNECTED";
                 currentBluetoothDeviceId = null;
                 textViewConnectionState.setText(connectionState);
+                if (!disconnectRequested) {
+                    disconnectMP.start();
+                }
+                disconnectRequested = false;
             }
 
             @Override
@@ -287,8 +304,9 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        disconnect.setOnClickListener(view -> {
+        disconnectButton.setOnClickListener(view -> {
             if (currentBluetoothDeviceId != null) {
+                disconnectRequested = true;
                 try {
                     api.disconnectFromDevice(currentBluetoothDeviceId);
                 } catch (PolarInvalidArgument polarInvalidArgument) {
@@ -303,12 +321,12 @@ public class MainActivity extends AppCompatActivity {
                 autoConnectDisposable = null;
             }
             autoConnectDisposable = api.autoConnectToDevice(-50, "180D", null).subscribe(
-                    () -> Log.d(TAG,"auto connect search complete"),
+                    () -> Log.d(TAG,"auto connectButton search complete"),
                     throwable -> Log.e(TAG,"" + throwable.toString())
             );
         });
 */
-        scan.setOnClickListener(view -> {
+        connectButton.setOnClickListener(view -> {
             api.searchForDevice().observeOn(AndroidSchedulers.mainThread()).subscribe(
                 polarDeviceInfo -> {
                     Log.d(TAG, "polar device found id: " + polarDeviceInfo.deviceId + " address: " + polarDeviceInfo.address + " rssi: " + polarDeviceInfo.rssi + " name: " + polarDeviceInfo.name + " isConnectable: " + polarDeviceInfo.isConnectable);
