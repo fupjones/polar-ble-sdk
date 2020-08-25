@@ -1,21 +1,18 @@
 package polar.com.androidblesdk;
 
-import polar.com.androidblesdk.BuildConfig;
-
 import android.Manifest;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.media.MediaPlayer;
-import android.media.Ringtone;
-import android.media.RingtoneManager;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.support.annotation.NonNull;
+import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.widget.Button;
+import android.widget.Switch;
 import android.widget.TextView;
 
 import org.reactivestreams.Publisher;
@@ -38,7 +35,6 @@ import polar.com.sdk.api.PolarBleApiDefaultImpl;
 import polar.com.sdk.api.errors.PolarInvalidArgument;
 import polar.com.sdk.api.model.PolarAccelerometerData;
 import polar.com.sdk.api.model.PolarDeviceInfo;
-import polar.com.sdk.api.model.PolarExerciseEntry;
 import polar.com.sdk.api.model.PolarHrData;
 import polar.com.sdk.api.model.PolarSensorSetting;
 
@@ -80,11 +76,11 @@ public class MainActivity extends AppCompatActivity {
 
     String FILENAME_BASE_ACC = "EVO_ACC_DATA";
     String FILENAME_BASE_HR = "EVO_HR_DATA";
-    String FILENAME_BASE_DEV = "EVO_DEV_DATA";
+    String FILENAME_BASE_LOG = "EVO_LOG";
     String FILENAME_EXTENSION = ".csv";
     FileOutputStream accFileOutputStream = null;
     FileOutputStream hrFileOutputStream = null;
-    FileOutputStream devFileOutputStream = null;
+    FileOutputStream logFileOutputStream = null;
 
     int blePower;
     int batteryLevel;
@@ -114,6 +110,8 @@ public class MainActivity extends AppCompatActivity {
         final Button startTestButton = this.findViewById(R.id.startTestButton);
         final Button endTestButton = this.findViewById(R.id.endTestButton);
 
+        final Switch evoOnSwitch = this.findViewById(R.id.evoOnSwitch);
+
         final TextView textViewConnectionState = findViewById(R.id.textViewConnectionState);
         textViewConnectionState.setText(connectionState);
 
@@ -138,33 +136,29 @@ public class MainActivity extends AppCompatActivity {
             DateFormat df = new SimpleDateFormat("yyyy-MM-dd");
             String today = df.format(Calendar.getInstance().getTime());
             // accelerometer data first
-//            String filename = FILENAME_BASE_ACC + System.currentTimeMillis() + FILENAME_EXTENSION;
-            String filename = FILENAME_BASE_ACC + "-" + today + FILENAME_EXTENSION;
-            String fileHeader = "Start: " + Calendar.getInstance().getTime() + System.lineSeparator();
+            String filename = today + "-" + FILENAME_BASE_ACC + FILENAME_EXTENSION;
             File accFile = new File(getApplicationContext().getExternalFilesDir(null), filename);
             try {
                 accFileOutputStream = new FileOutputStream(accFile,true);
-                accFileOutputStream.write(fileHeader.getBytes());
             } catch (IOException e1) {
                 Log.d(TAG, "exception opening: " + filename + ", " + e1.getMessage());
             }
 
             // now set up for heart rate data
-            filename = FILENAME_BASE_HR + "-" + today + FILENAME_EXTENSION;
+            filename = today + "-" + FILENAME_BASE_HR + FILENAME_EXTENSION;
             File hrFile = new File(getApplicationContext().getExternalFilesDir(null), filename);
             try {
                 hrFileOutputStream = new FileOutputStream(hrFile, true);
-                hrFileOutputStream.write(fileHeader.getBytes());
             } catch (IOException e1) {
                 Log.d(TAG, "exception opening: " + filename + ", " + e1.getMessage());
             }
 
             // now set up for device data
-            filename = FILENAME_BASE_DEV + "-" + today + FILENAME_EXTENSION;
+            filename = today + "-" + FILENAME_BASE_LOG + FILENAME_EXTENSION;
             File devFile = new File(getApplicationContext().getExternalFilesDir(null), filename);
             try {
-                devFileOutputStream = new FileOutputStream(devFile, true);
-                devFileOutputStream.write(fileHeader.getBytes());
+                logFileOutputStream = new FileOutputStream(devFile, true);
+                writeLogEvent("APP_START", 0);
             } catch (IOException e1) {
                 Log.d(TAG, "exception opening: " + filename + ", " + e1.getMessage());
             }
@@ -180,7 +174,6 @@ public class MainActivity extends AppCompatActivity {
             public void deviceConnected(@NonNull PolarDeviceInfo polarDeviceInfo) {
                 Log.d(TAG,"CONNECTED: " + polarDeviceInfo.address);
                 currentBluetoothDeviceId = polarDeviceInfo.deviceId;
-//                currentBluetoothDeviceName = bluetoothDeviceAddressToNameMap.get(polarDeviceInfo.address);
                 connectionState = "CONNECTED TO: " + bluetoothDeviceAddressToNameMap.get(polarDeviceInfo.address);
                 textViewConnectionState.setText(connectionState);
                 // reset the time adjustment variables for the accelerometer data
@@ -189,6 +182,7 @@ public class MainActivity extends AppCompatActivity {
                 lastAccSampleTime = 0;
                 disconnectRequested = false;
                 connectMP.start();
+                writeLogEvent("DEVICE_CONNECT", bluetoothDeviceAddressToNameMap.get(polarDeviceInfo.address));
             }
 
             @Override
@@ -208,6 +202,7 @@ public class MainActivity extends AppCompatActivity {
                     disconnectMP.start();
                 }
                 disconnectRequested = false;
+                writeLogEvent("DEVICE_DISCONNECT", 0);
             }
 
             @Override
@@ -215,16 +210,11 @@ public class MainActivity extends AppCompatActivity {
                 Log.d(TAG,"ACC READY: " + identifier);
                 // this is a convenient place to try to set the time
                 Calendar calendar = Calendar.getInstance();
-/*                Log.d(TAG,"Setting time on device: " + calendar.getTime());
-                api.setLocalTime(currentBluetoothDeviceId,calendar).subscribe(
-                        () -> Log.d(TAG,"time set to device: " + currentBluetoothDeviceId),
-                        throwable -> Log.d(TAG,"set time failed: " + throwable.getLocalizedMessage())
-                );
-*/              accDisposable = api.requestAccSettings(currentBluetoothDeviceId).toFlowable().flatMap((Function<PolarSensorSetting, Publisher<PolarAccelerometerData>>) settings -> {
+                accDisposable = api.requestAccSettings(currentBluetoothDeviceId).toFlowable().flatMap((Function<PolarSensorSetting, Publisher<PolarAccelerometerData>>) settings -> {
                     // TODO find out how to configure "settings" to send one accelerometer data point at a time.
                     PolarSensorSetting sensorSetting = settings.maxSettings();
                     return api.startAccStreaming(currentBluetoothDeviceId,sensorSetting);
-                }).observeOn(AndroidSchedulers.mainThread()).subscribe(
+                    }).observeOn(AndroidSchedulers.mainThread()).subscribe(
                         polarAccelerometerData -> {
                             // try to align incoming sample times with phone epoch clock
                             if (baseAccEpochTime == 0) {
@@ -277,12 +267,7 @@ public class MainActivity extends AppCompatActivity {
             public void batteryLevelReceived(@NonNull String identifier, int level) {
                 Log.d(TAG,"BATTERY LEVEL: " + level);
                 batteryLevel = level;
-                String dataOut = Calendar.getInstance().getTimeInMillis() + "," + batteryLevel + System.lineSeparator();
-                try {
-                    devFileOutputStream.write(dataOut.getBytes());
-                } catch (IOException e1) {
-                    Log.d(TAG, "exception writing dev data" + ", " + e1.getMessage());
-                }
+                writeLogEvent("BATTERY_LEVEL", batteryLevel);
             }
 
             @Override
@@ -344,10 +329,47 @@ public class MainActivity extends AppCompatActivity {
             showDialog(DIALOG_SELECT_DEVICE);
         });
 
+        startTestButton.setOnClickListener(view -> {
+            writeLogEvent("MARKER_START", 0);
+            Snackbar.make(findViewById(android.R.id.content),"Test Started",Snackbar.LENGTH_SHORT).show();
+        });
+
+        endTestButton.setOnClickListener(view -> {
+            writeLogEvent("MARKER_END", 0);
+            Snackbar.make(findViewById(android.R.id.content),"Test Ended",Snackbar.LENGTH_SHORT).show();
+        });
+
+        evoOnSwitch.setOnCheckedChangeListener((view, isChecked) -> {
+            if (isChecked) {
+                writeLogEvent("EVO_ON", 0);
+            } else {
+                writeLogEvent("EVO_OFF", 0);
+            }
+        });
+
         if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && savedInstanceState == null) {
             this.requestPermissions(new String[]{Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION}, 1);
         }
     }
+
+    protected void writeLogEvent(String data) {
+        String dataOut = Calendar.getInstance().getTimeInMillis() * 1000000 + "," + data;
+        try {
+            logFileOutputStream.write(dataOut.getBytes());
+        } catch (IOException e1) {
+            Log.d(TAG, "exception writing acc data" + ", " + e1.getMessage());
+        }
+    };
+
+    protected void writeLogEvent(String event, int value) {
+        String data = event + "," + value + System.lineSeparator();
+        writeLogEvent(data);
+    };
+
+    protected void writeLogEvent(String event, String value) {
+        String data = event + "," + value + System.lineSeparator();
+        writeLogEvent(data);
+    };
 
     protected AlertDialog onCreateDialog(int id) {
         switch(id) {
@@ -373,7 +395,7 @@ public class MainActivity extends AppCompatActivity {
                                 } catch (PolarInvalidArgument polarInvalidArgument) {
                                     polarInvalidArgument.printStackTrace();
                                 }
-
+                                writeLogEvent("USER_CONNECT", targetBluetoothDeviceName);
                                 Log.d(TAG,"Target device:" + targetBluetoothDeviceName);
                             }
                         })
@@ -382,6 +404,7 @@ public class MainActivity extends AppCompatActivity {
                                 // nothing to do here.  Just leave it as-is.
                                 Log.d(TAG,"Device selection canceled: target device:" + targetBluetoothDeviceName);
                                 targetBluetoothDeviceName = null;
+                                writeLogEvent("USER_CONNECT_CANCEL", targetBluetoothDeviceName);
                                 dialog.cancel();
                             }
                         });

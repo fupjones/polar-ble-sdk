@@ -28,36 +28,36 @@
     <TextView
         android:id="@+id/textViewAccelXLabel"
         android:layout_width="180dp"
-        android:layout_height="40dp"
+        android:layout_height="25dp"
         android:text="@string/AccelXLabel"
-        android:textAppearance="@style/TextAppearance.AppCompat.Display1"
+        android:textAppearance="@style/TextAppearance.AppCompat.Large"
         app:layout_constraintStart_toStartOf="@+id/textViewHeartRateLabel"
         app:layout_constraintTop_toBottomOf="@+id/textViewHeartRateLabel" />
 
     <TextView
         android:id="@+id/textViewAccelYLabel"
         android:layout_width="180dp"
-        android:layout_height="40dp"
+        android:layout_height="25dp"
         android:text="@string/AccelYLabel"
-        android:textAppearance="@style/TextAppearance.AppCompat.Display1"
+        android:textAppearance="@style/TextAppearance.AppCompat.Large"
         app:layout_constraintStart_toStartOf="@+id/textViewHeartRateLabel"
         app:layout_constraintTop_toBottomOf="@+id/textViewAccelXLabel" />
 
     <TextView
         android:id="@+id/textViewAccelZLabel"
         android:layout_width="180dp"
-        android:layout_height="40dp"
+        android:layout_height="25dp"
         android:text="@string/AccelZLabel"
-        android:textAppearance="@style/TextAppearance.AppCompat.Display1"
+        android:textAppearance="@style/TextAppearance.AppCompat.Large"
         app:layout_constraintStart_toStartOf="@+id/textViewHeartRateLabel"
         app:layout_constraintTop_toBottomOf="@+id/textViewAccelYLabel" />
 
     <TextView
         android:id="@+id/textViewAccelTotalLabel"
         android:layout_width="180dp"
-        android:layout_height="40dp"
+        android:layout_height="25dp"
         android:text="@string/AccelTotalLabel"
-        android:textAppearance="@style/TextAppearance.AppCompat.Display1"
+        android:textAppearance="@style/TextAppearance.AppCompat.Large"
         app:layout_constraintStart_toStartOf="@+id/textViewHeartRateLabel"
         app:layout_constraintTop_toBottomOf="@+id/textViewAccelZLabel" />
 
@@ -78,20 +78,19 @@
         android:id="@+id/textViewHeartRateLabel"
         android:layout_width="180dp"
         android:layout_height="70dp"
-        android:layout_marginTop="40dp"
         android:text="@string/heartRateLabel"
         android:textAppearance="@style/TextAppearance.AppCompat.Display1"
-        app:layout_constraintStart_toStartOf="@+id/evoInUseCheckBox"
-        app:layout_constraintTop_toBottomOf="@+id/evoInUseCheckBox" />
+        app:layout_constraintStart_toStartOf="@+id/evoOnSwitch"
+        app:layout_constraintTop_toBottomOf="@+id/evoOnSwitch" />
 
     <TextView
         android:id="@+id/textViewAccelXValue"
         android:layout_width="128dp"
-        android:layout_height="40dp"
+        android:layout_height="25dp"
         android:layout_marginStart="16dp"
         android:layout_marginEnd="16dp"
         android:text="@string/AccelXValue"
-        android:textAppearance="@style/TextAppearance.AppCompat.Display1"
+        android:textAppearance="@style/TextAppearance.AppCompat.Large"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toEndOf="@+id/textViewHeartRateLabel"
@@ -100,11 +99,11 @@
     <TextView
         android:id="@+id/textViewAccelYValue"
         android:layout_width="128dp"
-        android:layout_height="40dp"
+        android:layout_height="25dp"
         android:layout_marginStart="16dp"
         android:layout_marginEnd="16dp"
         android:text="@string/AccelYValue"
-        android:textAppearance="@style/TextAppearance.AppCompat.Display1"
+        android:textAppearance="@style/TextAppearance.AppCompat.Large"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toEndOf="@+id/textViewHeartRateLabel"
@@ -113,11 +112,11 @@
     <TextView
         android:id="@+id/textViewAccelZValue"
         android:layout_width="128dp"
-        android:layout_height="40dp"
+        android:layout_height="25dp"
         android:layout_marginStart="16dp"
         android:layout_marginEnd="16dp"
         android:text="@string/AccelZValue"
-        android:textAppearance="@style/TextAppearance.AppCompat.Display1"
+        android:textAppearance="@style/TextAppearance.AppCompat.Large"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toEndOf="@+id/textViewHeartRateLabel"
@@ -126,11 +125,11 @@
     <TextView
         android:id="@+id/textViewAccelTotalValue"
         android:layout_width="128dp"
-        android:layout_height="40dp"
+        android:layout_height="25dp"
         android:layout_marginStart="16dp"
         android:layout_marginEnd="16dp"
         android:text="@string/AccelTotalValue"
-        android:textAppearance="@style/TextAppearance.AppCompat.Display1"
+        android:textAppearance="@style/TextAppearance.AppCompat.Large"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toEndOf="@+id/textViewHeartRateLabel"
@@ -174,16 +173,20 @@
         app:layout_constraintStart_toStartOf="@+id/disconnectButton"
         app:layout_constraintTop_toTopOf="@+id/startTestButton" />
 
-    <CheckBox
-        android:id="@+id/evoInUseCheckBox"
-        style="@style/Widget.AppCompat.CompoundButton.CheckBox"
-        android:layout_width="190dp"
-        android:layout_height="49dp"
-        android:layout_marginTop="21dp"
-        android:text="EVO in use"
+    <Switch
+        android:id="@+id/evoOnSwitch"
+        android:layout_width="285dp"
+        android:layout_height="88dp"
+        android:checked="false"
+        android:showText="true"
+        android:splitTrack="false"
+        android:switchTextAppearance="@style/TextAppearance.AppCompat.Medium"
+        android:text="Wearing EVO"
         android:textAppearance="@style/TextAppearance.AppCompat.Display1"
-        android:textSize="24sp"
+        android:textOff="NO"
+        android:textOn="YES"
         app:layout_constraintStart_toStartOf="@+id/startTestButton"
-        app:layout_constraintTop_toBottomOf="@+id/startTestButton" />
+        app:layout_constraintTop_toBottomOf="@+id/startTestButton"
+        tools:checked="false" />
 
 </android.support.constraint.ConstraintLayout>
